@@ -211,7 +211,7 @@ def build_engine(
     start = time()
     # trt_engine = builder.build_serialized_network(network_def, config)
     # engine: ICudaEngine = runtime.deserialize_cuda_engine(trt_engine)
-    engine = builder.build_engine(network_def, config=config)
+    engine = builder.build_serialized_network(network_def, config=config)
     logger.log(msg=f"building engine took {time() - start:4.1f} seconds", severity=trt.ILogger.WARNING)
     assert engine is not None, "error during engine generation, check error messages above :-("
     # save global timing cache

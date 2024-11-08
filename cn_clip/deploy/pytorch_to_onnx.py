@@ -11,7 +11,7 @@ import torch.onnx
 from onnx import load_model, save_model
 from onnxmltools.utils import convert_float_to_float16
 import cn_clip.clip as clip
-from clip.utils import _MODELS, _MODEL_INFO, _download, available_models, create_model, image_transform
+from cn_clip.clip.utils import _MODELS, _MODEL_INFO, _download, available_models, create_model, image_transform
 
 def parse_args():
     parser = argparse.ArgumentParser()
@@ -143,7 +143,7 @@ if __name__ == '__main__':
                     output_names=['unnorm_image_features'],
                     export_params=True,
                     do_constant_folding=False,
-                    opset_version=13,
+                    opset_version=14,
                     verbose=True)
         # for ViT-H-14 FP32 model, make another conversion to deal with the generated small files
         if args.model_arch == "ViT-H-14":
