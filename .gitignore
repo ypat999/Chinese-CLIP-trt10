@@ -11,6 +11,9 @@ __pycache__/
 
 # C extensions
 *.so
+*.pt
+*.trt
+*.onnx
 
 # Distribution / packaging
 .Python

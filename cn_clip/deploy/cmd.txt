@@ -1,0 +1,17 @@
+cd ../Chinese-CLIP/
+set CUDA_VISIBLE_DEVICES=0
+set PYTHONPATH=D:\projects\git\Chinese-CLIP-trt10
+
+set DATAPATH=C:\Users\rkadmin\.cache\huggingface\hub\models--OFA-Sys--chinese-clip-vit-base-patch16
+set checkpoint_path=%DATAPATH%/snapshots/36e679e65c2a2fead755ae21162091293ad37834/clip_cn_vit-b-16.pt
+mkdir %DATAPATH%\deploy\
+python cn_clip/deploy/pytorch_to_onnx.py        --model-arch ViT-B-16        --pytorch-ckpt-path %checkpoint_path%        --save-onnx-path %DATAPATH%/deploy/vit-b-16        --convert-text --convert-vision
+
+
+
+
+
+
+set PYTHONPATH=D:\projects\git\Chinese-CLIP      
+
+python cn_clip/deploy/onnx_to_tensorrt.py        --model-arch ViT-B-16        --convert-text        --text-onnx-path D:/projects/huggingface/hub/models--OFA-Sys--chinese-clip-vit-base-patch16/deploy/vit-b-16.txt.fp32.onnx        --convert-vision        --vision-onnx-path D:/projects/huggingface/hub/models--OFA-Sys--chinese-clip-vit-base-patch16/deploy/vit-b-16.img.fp32.onnx        --save-tensorrt-path D:/projects/huggingface/hub/models--OFA-Sys--chinese-clip-vit-base-patch16/deploy/vit-b-16        --fp16

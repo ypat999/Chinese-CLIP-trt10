@@ -8,7 +8,7 @@ import torch
 
 import tensorrt as trt
 from tensorrt import ICudaEngine, ILayer, INetworkDefinition, Logger, Runtime
-from tensorrt.tensorrt import Builder, IBuilderConfig, IElementWiseLayer, IOptimizationProfile, IReduceLayer
+from tensorrt import Builder, IBuilderConfig, IElementWiseLayer, IOptimizationProfile, IReduceLayer
 
 
 @dataclass
@@ -144,7 +144,10 @@ def build_engine(
     builder: Builder = trt.Builder(logger)
     config: IBuilderConfig = builder.create_builder_config()
     if workspace_size is not None:
-        config.set_memory_pool_limit(trt.tensorrt.MemoryPoolType.DLA_GLOBAL_DRAM, workspace_size)
+        if trt.__version__ < "8.6":
+            config.set_memory_pool_limit(trt.tensorrt.MemoryPoolType.DLA_GLOBAL_DRAM, workspace_size)
+        else:
+            config.set_memory_pool_limit(trt.tensorrt.MemoryPoolType.HOST_PINNED, workspace_size)
     config.set_tactic_sources(
         tactic_sources=1 << int(trt.TacticSource.CUBLAS)
         | 1 << int(trt.TacticSource.CUBLAS_LT)
@@ -162,10 +165,10 @@ def build_engine(
         if os.path.exists(timing_cache):
             with open(timing_cache, "rb") as f:
                 cache = config.create_timing_cache(f.read())
-                config.set_timing_cache(cache, ignore_mismatch=False)
+                config.set_timing_cache(cache, ignore_mismatch=True)
         else:
             cache = config.create_timing_cache(b"")
-            config.set_timing_cache(cache, ignore_mismatch=False)
+            config.set_timing_cache(cache, ignore_mismatch=True)
 
     explicit_batch = 1 << (int)(trt.NetworkDefinitionCreationFlag.EXPLICIT_BATCH)
     network_def = builder.create_network(explicit_batch)
@@ -209,9 +212,8 @@ def build_engine(
 
     logger.log(msg="building engine. depending on model size this may take a while", severity=trt.ILogger.WARNING)
     start = time()
-    # trt_engine = builder.build_serialized_network(network_def, config)
-    # engine: ICudaEngine = runtime.deserialize_cuda_engine(trt_engine)
-    engine = builder.build_serialized_network(network_def, config=config)
+    trt_engine = builder.build_serialized_network(network_def, config)
+    engine: ICudaEngine = runtime.deserialize_cuda_engine(trt_engine)
     logger.log(msg=f"building engine took {time() - start:4.1f} seconds", severity=trt.ILogger.WARNING)
     assert engine is not None, "error during engine generation, check error messages above :-("
     # save global timing cache
@@ -248,15 +250,15 @@ def get_binding_idxs(engine: trt.ICudaEngine, profile_index: int):
     :param profile_index: profile to use (several profiles can be set during building)
     :return: input and output tensor indexes
     """
-    num_bindings_per_profile = engine.num_bindings // engine.num_optimization_profiles
+    num_bindings_per_profile = engine.num_io_tensors // engine.num_optimization_profiles
     start_binding = profile_index * num_bindings_per_profile
     end_binding = start_binding + num_bindings_per_profile  # Separate input and output binding indices for convenience
     input_binding_idxs: List[int] = []
     output_binding_idxs: List[int] = []
     for binding_index in range(start_binding, end_binding):
-        if engine.binding_is_input(binding_index):
+        if engine.get_tensor_mode(engine.get_tensor_name(binding_index)) == trt.TensorIOMode.INPUT:
             input_binding_idxs.append(binding_index)
-        else:
+        elif engine.get_tensor_mode(engine.get_tensor_name(binding_index)) == trt.TensorIOMode.OUTPUT:
             output_binding_idxs.append(binding_index)
     return input_binding_idxs, output_binding_idxs
 
@@ -277,14 +279,15 @@ def get_output_tensors(
     """
     # explicitly set dynamic input shapes, so dynamic output shapes can be computed internally
     for host_input, binding_index in zip(host_inputs, input_binding_idxs):
-        input_name = context.engine.get_binding_name(binding_index)
-        context.set_binding_shape(binding_index, tuple(host_input.shape))
+        input_name = context.engine.get_tensor_name(binding_index)
+        # print("host_input.shape:", host_input.shape)
+        context.set_input_shape(input_name, tuple(host_input.shape))
     # assert context.all_binding_shapes_specified
     device_outputs: Dict[str, torch.Tensor] = dict()
     for binding_index in output_binding_idxs:
         # TensorRT computes output shape based on input shape provided above
-        output_shape = context.get_binding_shape(binding=binding_index)
-        output_name = context.engine.get_binding_name(index=binding_index)
+        output_name = context.engine.get_tensor_name(binding_index)
+        output_shape = context.get_tensor_shape(output_name)
         # allocate buffers to hold output results
         device_outputs[output_name] = torch.empty(tuple(output_shape), device="cuda")
     return device_outputs
@@ -309,12 +312,16 @@ class TensorRTModel(object):
 
     def __call__(self, inputs, time_buffer=None):
         input_tensors: List[torch.Tensor] = list()
-        for i in range(self.context.engine.num_bindings):
-            if not self.context.engine.binding_is_input(index=i):
+        for i in range(self.context.engine.num_io_tensors):
+            tensor_name = self.context.engine.get_tensor_name(i)
+            
+            tensor_mode = self.context.engine.get_tensor_mode(tensor_name)
+            print(f"tensor_name: {tensor_name}, tensor_mode: {tensor_mode}")
+            if not tensor_mode == trt.TensorIOMode.INPUT:
                 continue
-            tensor_name = self.context.engine.get_binding_name(i)
             assert tensor_name in inputs, f"input not provided: {tensor_name}"
             tensor = inputs[tensor_name]
+            print(f"input tensor: {tensor_name}, shape: {tensor.shape}")
             assert isinstance(tensor, torch.Tensor), f"unexpected tensor class: {type(tensor)}"
             assert tensor.device.type == "cuda", f"unexpected device type (trt only works on CUDA): {tensor.device.type}"
             # warning: small changes in output if int64 is used instead of int32
@@ -328,11 +335,21 @@ class TensorRTModel(object):
             self.context, input_tensors, self.input_binding_idxs, self.output_binding_idxs
         )
         bindings = [int(i.data_ptr()) for i in input_tensors + list(outputs.values())]
+
+
+        nIO = self.engine.num_io_tensors
+        lTensorName = [self.engine.get_tensor_name(i) for i in range(nIO)]
+        for i in range(nIO):
+            self.context.set_tensor_address(lTensorName[i], int(bindings[i]))
+
+
         if time_buffer is None:
-            self.context.execute_v2(bindings=bindings)
+            # self.context.execute_v2(bindings=bindings)
+            self.context.execute_async_v3(0)
         else:
             with track_infer_time(time_buffer):
-                self.context.execute_v2(bindings=bindings)
+                # self.context.execute_v2(bindings=bindings)
+                self.context.execute_async_v3(0)
 
         torch.cuda.current_stream().synchronize()  # sync all CUDA ops
 

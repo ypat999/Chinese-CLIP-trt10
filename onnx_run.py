@@ -12,13 +12,13 @@ from cn_clip.clip.utils import _MODELS, _MODEL_INFO, _download, available_models
 img_sess_options = onnxruntime.SessionOptions()
 img_run_options = onnxruntime.RunOptions()
 img_run_options.log_severity_level = 2
-img_onnx_model_path="D:/projects/huggingface/hub/models--OFA-Sys--chinese-clip-vit-large-patch14-336px/deploy/vit-l-14-336.img.fp16.onnx"
+img_onnx_model_path="D:/projects/huggingface/hub/models--OFA-Sys--chinese-clip-vit-base-patch16/deploy/vit-b-16.img.fp16.onnx"
 img_session = onnxruntime.InferenceSession(img_onnx_model_path,
                                         sess_options=img_sess_options,
                                         providers=["CUDAExecutionProvider"])
 
 # 预处理图片
-model_arch = "ViT-L-14-336" # 这里我们使用的是ViT-B-16规模，其他规模请对应修改
+model_arch = "ViT-B-16" # 这里我们使用的是ViT-B-16规模，其他规模请对应修改
 preprocess = image_transform(_MODEL_INFO[model_arch]['input_resolution'])
 # 示例皮卡丘图片，预处理后得到[1, 3, 分辨率, 分辨率]尺寸的Torch Tensor
 image = preprocess(Image.open("examples/pokemon.jpeg")).unsqueeze(0)
@@ -36,7 +36,7 @@ print(image_features.shape) # Torch Tensor shape: [1, 特征向量维度]
 txt_sess_options = onnxruntime.SessionOptions()
 txt_run_options = onnxruntime.RunOptions()
 txt_run_options.log_severity_level = 2
-txt_onnx_model_path="D:/projects/huggingface/hub/models--OFA-Sys--chinese-clip-vit-large-patch14-336px/deploy/vit-l-14-336.txt.fp16.onnx"
+txt_onnx_model_path="D:/projects/huggingface/hub/models--OFA-Sys--chinese-clip-vit-base-patch16/deploy/vit-b-16.txt.fp16.onnx"
 txt_session = onnxruntime.InferenceSession(txt_onnx_model_path,
                                         sess_options=txt_sess_options,
                                         providers=["CUDAExecutionProvider"])
