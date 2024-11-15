@@ -1,3 +1,4 @@
+from  system_path import *
 # 完成必要的import（下文省略）
 from cn_clip.deploy.tensorrt_utils import TensorRTModel
 from PIL import Image
@@ -9,7 +10,7 @@ from cn_clip.clip import load_from_name, available_models
 from cn_clip.clip.utils import _MODELS, _MODEL_INFO, _download, available_models, create_model, image_transform
 
 # 载入TensorRT图像侧模型（**请替换${DATAPATH}为实际的路径**）
-img_trt_model_path="/public/ywj/huggingface/hub/models--OFA-Sys--chinese-clip-vit-large-patch14-336px/deploy/vit-l-14-336.img.fp16.trt"
+img_trt_model_path=model_path_pre + "vit-l-14-336.img.fp16.trt"
 img_trt_model = TensorRTModel(img_trt_model_path)
 
 # 预处理图片
@@ -26,7 +27,7 @@ print(image_features.shape) # Torch Tensor shape: [1, 特征向量维度]
 
 
 # 载入TensorRT文本侧模型（**请替换${DATAPATH}为实际的路径**）
-txt_trt_model_path="/public/ywj/huggingface/hub/models--OFA-Sys--chinese-clip-vit-large-patch14-336px/deploy/vit-l-14-336.txt.fp16.trt"
+txt_trt_model_path=model_path_pre + "vit-l-14-336.txt.fp16.trt"
 txt_trt_model = TensorRTModel(txt_trt_model_path)
 
 # 为4条输入文本进行分词。序列长度指定为52，需要和转换ONNX模型时保持一致（参见ONNX转换时的context-length参数）
