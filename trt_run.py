@@ -9,11 +9,11 @@ from cn_clip.clip import load_from_name, available_models
 from cn_clip.clip.utils import _MODELS, _MODEL_INFO, _download, available_models, create_model, image_transform
 
 # 载入TensorRT图像侧模型（**请替换${DATAPATH}为实际的路径**）
-img_trt_model_path="D:/projects/huggingface/hub/models--OFA-Sys--chinese-clip-vit-base-patch16/deploy/vit-b-16.img.fp16.trt"
+img_trt_model_path="/public/ywj/huggingface/hub/models--OFA-Sys--chinese-clip-vit-large-patch14-336px/deploy/vit-l-14-336.img.fp16.trt"
 img_trt_model = TensorRTModel(img_trt_model_path)
 
 # 预处理图片
-model_arch = "ViT-B-16" # 这里我们使用的是ViT-B-16规模，其他规模请对应修改
+model_arch = "ViT-L-14-336" # 这里我们使用的是ViT-B-16规模，其他规模请对应修改
 preprocess = image_transform(_MODEL_INFO[model_arch]['input_resolution'])
 # 示例皮卡丘图片，预处理后得到[1, 3, 分辨率, 分辨率]尺寸的Torch Tensor
 image = preprocess(Image.open("examples/pokemon.jpeg")).unsqueeze(0).cuda()
@@ -26,7 +26,7 @@ print(image_features.shape) # Torch Tensor shape: [1, 特征向量维度]
 
 
 # 载入TensorRT文本侧模型（**请替换${DATAPATH}为实际的路径**）
-txt_trt_model_path="D:/projects/huggingface/hub/models--OFA-Sys--chinese-clip-vit-base-patch16/deploy/vit-b-16.txt.fp16.trt"
+txt_trt_model_path="/public/ywj/huggingface/hub/models--OFA-Sys--chinese-clip-vit-large-patch14-336px/deploy/vit-l-14-336.txt.fp16.trt"
 txt_trt_model = TensorRTModel(txt_trt_model_path)
 
 # 为4条输入文本进行分词。序列长度指定为52，需要和转换ONNX模型时保持一致（参见ONNX转换时的context-length参数）
